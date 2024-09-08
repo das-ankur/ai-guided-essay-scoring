@@ -1,0 +1,6 @@
+numpy
+spacy
+nltk
+syllapy
+pyspellchecker
+textstat
