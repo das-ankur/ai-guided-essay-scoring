@@ -12,20 +12,20 @@ from transformers import AutoTokenizer, AutoModel
 Generate embeddings from encoder only models using mean pooling
 '''
 class EmbeddingsGenerator:
-    def __init__(self, model_name: str, batch_size: int, **configs):
-        self.model_name = model_name
-        self.configs = configs
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.model = AutoModel.from_pretrained(self.model_name).to(self.configs['device'])
+    def __init__(self, model_name: str, batch_size: int = 8, input_col: str = 'full_text'):
+        device = torch.device('cpu')
+        self.input_col = input_col
+        self.batch_size = batch_size
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name).to(device)
         if torch.cuda.device_count() > 1:
             self.model = DataParallel(self.model)
-        self.batch_size = batch_size
         self.model = self.model.eval()
     
     def tokenize_data(self, dataset):
         dataset = dataset.map(
             lambda x: self.tokenizer(
-                x[self.configs['input_column']],
+                x[self.input_col],
                 max_length=1024,
                 add_special_tokens=True,
                 padding='max_length', 
@@ -54,8 +54,7 @@ class EmbeddingsGenerator:
         with torch.no_grad():
             model_output = self.model(input_ids=input_ids,
                                      attention_mask=attention_mask)
-        if self.configs['pooling_strategy'][self.model_name] == 'mean':
-            batch['{}_embeddings'.format(self.model_name)] = EmbeddingsGenerator.mean_pooling(model_output, attention_mask)
+        batch['{}_embeddings'.format(self.model_name)] = EmbeddingsGenerator.mean_pooling(model_output, attention_mask)
         return batch
     
     def get_embeddings(self, dataset):                
@@ -67,7 +66,7 @@ class EmbeddingsGenerator:
         return dataset
     
     def filter_features(self, dataset):
-        keep_features = ["essay_id", self.configs['input_column'], "word_features", "sentence_features"]
+        keep_features = ["essay_id", self.input_col, "word_features", "sentence_features"]
         keep_features += [feature for feature in dataset.column_names if feature.endswith("_embeddings")]
         dataset = dataset.remove_columns([feature for feature in dataset.column_names if feature not in keep_features])
         return dataset
