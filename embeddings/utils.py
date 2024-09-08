@@ -25,7 +25,7 @@ class EmbeddingsGenerator:
     def tokenize_data(self, dataset):
         dataset = dataset.map(
             lambda x: self.tokenizer(
-                x['text'],
+                x[self.configs['input_column']],
                 max_length=1024,
                 add_special_tokens=True,
                 padding='max_length', 
@@ -67,7 +67,7 @@ class EmbeddingsGenerator:
         return dataset
     
     def filter_features(self, dataset):
-        keep_features = ["essay_id", "text", "word_features", "sentence_features"]
+        keep_features = ["essay_id", self.configs['input_column'], "word_features", "sentence_features"]
         keep_features += [feature for feature in dataset.column_names if feature.endswith("_embeddings")]
         dataset = dataset.remove_columns([feature for feature in dataset.column_names if feature not in keep_features])
         return dataset
