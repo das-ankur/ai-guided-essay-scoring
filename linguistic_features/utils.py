@@ -1,10 +1,14 @@
 # Import libraries
+import os
+from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
 import numpy as np
+import pandas as pd
 import spacy
 nlp = spacy.load("en_core_web_sm")
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from tqdm import tqdm
 
 
 
@@ -47,3 +51,25 @@ def extract_linguistic_features(text):
     features["std_positive"] = np.std(positive_scores)
     features["std_neutral"] = np.std(neutral_scores)
     return features
+
+
+'''
+Function to extract features and save it
+'''
+def extract_and_save_features(row, id_col, input_col, folder_path):
+    essay_id = row[id_col]
+    text = row[input_col]
+    features = extract_linguistic_features(text)
+    np.save(os.path.join(folder_path, str(essay_id) + '.npy'), np.array(features.values()))
+
+
+'''
+Given a dataframe extract features for all records
+'''
+def get_sentence_features(df: pd.DataFrame, id_col: str, input_col: str):
+    folder_path = os.path.join('features', 'linguistic_features')
+    os.makedirs(folder_path, exist_ok=True)
+    with ThreadPoolExecutor() as executor:
+        list(tqdm(executor.map(lambda row: extract_and_save_features(row, id_col, input_col, folder_path), 
+                               df.to_dict(orient='records')), 
+                  desc='Extracting Linguistic Features', total=df.shape[0]))

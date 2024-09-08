@@ -1,6 +1,11 @@
 # Import libraries
+import os
+from concurrent.futures import ThreadPoolExecutor
+import numpy as np
+import pandas as pd
 from nltk.tokenize import sent_tokenize
 import textstat
+from tqdm import tqdm
 
 
 
@@ -27,3 +32,25 @@ def extract_sentence_features(text: str):
     features['lexicon_count'] = textstat.lexicon_count(text)
     features['monosyllabcount'] = textstat.monosyllabcount(text)
     return features
+
+
+'''
+Function to extract features and save it
+'''
+def extract_and_save_features(row, id_col, input_col, folder_path):
+    essay_id = row[id_col]
+    text = row[input_col]
+    features = extract_sentence_features(text)
+    np.save(os.path.join(folder_path, str(essay_id) + '.npy'), np.array(features.values()))
+
+
+'''
+Given a dataframe extract features for all records
+'''
+def get_sentence_features(df: pd.DataFrame, id_col: str, input_col: str):
+    folder_path = os.path.join('features', 'sentence_features')
+    os.makedirs(folder_path, exist_ok=True)
+    with ThreadPoolExecutor() as executor:
+        list(tqdm(executor.map(lambda row: extract_and_save_features(row, id_col, input_col, folder_path), 
+                               df.to_dict(orient='records')), 
+                  desc='Extracting Sentence Features', total=df.shape[0]))

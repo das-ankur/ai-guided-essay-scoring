@@ -1,10 +1,13 @@
 # Import libraries
+import os
 import gc
 import time
+import numpy as np
 import torch
 from torch.nn import DataParallel
 import datasets
 from transformers import AutoTokenizer, AutoModel
+from tqdm import trange
 
 
 
@@ -12,8 +15,9 @@ from transformers import AutoTokenizer, AutoModel
 Generate embeddings from encoder only models using mean pooling
 '''
 class EmbeddingsGenerator:
-    def __init__(self, model_name: str, batch_size: int = 8, input_col: str = 'full_text'):
+    def __init__(self, model_name: str, batch_size: int, id_col: str, input_col: str):
         device = torch.device('cpu')
+        self.id_col = id_col
         self.input_col = input_col
         self.batch_size = batch_size
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -66,7 +70,7 @@ class EmbeddingsGenerator:
         return dataset
     
     def filter_features(self, dataset):
-        keep_features = ["essay_id", self.input_col, "word_features", "sentence_features"]
+        keep_features = [self.id_col, self.input_col, "word_features", "sentence_features"]
         keep_features += [feature for feature in dataset.column_names if feature.endswith("_embeddings")]
         dataset = dataset.remove_columns([feature for feature in dataset.column_names if feature not in keep_features])
         return dataset
@@ -75,7 +79,9 @@ class EmbeddingsGenerator:
         del self.tokenizer
         del self.model
     
-    def __call__(self, dataset: datasets.DatasetDict):
+    def __call__(self, dataset: datasets.DataFrame):
+        print("Extracting Embeddings: ")
+        print("=======================")
         dataset = self.tokenize_data(dataset)
         dataset = self.get_embeddings(dataset)
         dataset = self.filter_features(dataset)
@@ -83,3 +89,17 @@ class EmbeddingsGenerator:
         time.sleep(5)
         torch.cuda.empty_cache()
         return dataset
+    
+
+'''
+Merge embeddings and save 
+'''
+def merge_and_save_embeddings(dataset: datasets.Dataset, id_col: str):
+    folder_path = os.path.join('dumps', 'embeddings')
+    embed_cols = [col for col in dataset.column_name if 'embeddings' in col]
+    for i in trange(len(dataset), desc='Saving Embeddings'):
+        fid = dataset[i][id_col]
+        temp = []
+        for col in embed_cols:
+            temp.extend(dataset[i][col])
+        np.save(os.path.join(folder_path, str(fid) + '.npy'), np.array(temp))
